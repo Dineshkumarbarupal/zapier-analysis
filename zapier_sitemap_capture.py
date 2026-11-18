@@ -274,6 +274,30 @@ class GitHubUploader:
         self.request("PATCH", f"{API}/git/refs/heads/{BRANCH}", json={"sha": commit["sha"], "force": False})
         self.head, self.tree = commit["sha"], tree["sha"]
 
+    def upload_reports(self) -> None:
+        """Publish the generated URL-count summary and page inventory to GitHub."""
+        files = [
+            (REPORT_DIR / "latest_summary.json", "reports/latest_summary.json"),
+            (REPORT_DIR / "pages.csv", "reports/pages.csv"),
+        ]
+        elements = []
+        for local_path, remote_path in files:
+            if not local_path.exists():
+                continue
+            encoded = base64.b64encode(local_path.read_bytes()).decode("ascii")
+            blob = self.request("POST", f"{API}/git/blobs", json={"content": encoded, "encoding": "base64"})
+            elements.append({"path": remote_path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        if not elements:
+            return
+        tree = self.request("POST", f"{API}/git/trees", json={"base_tree": self.tree, "tree": elements})
+        commit = self.request("POST", f"{API}/git/commits", json={
+            "message": "Publish Zapier sitemap URL count and page inventory",
+            "tree": tree["sha"], "parents": [self.head],
+        })
+        self.request("PATCH", f"{API}/git/refs/heads/{BRANCH}", json={"sha": commit["sha"], "force": False})
+        self.head, self.tree = commit["sha"], tree["sha"]
+        logging.info("Published reports/latest_summary.json and reports/pages.csv to GitHub.")
+
 
 def reports(db: sqlite3.Connection, crawler: SitemapCrawler) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -443,6 +467,10 @@ def main() -> int:
         return 6
 
     reports(db, crawler)
+    try:
+        uploader.upload_reports()
+    except Exception:
+        logging.exception("Could not publish report files to GitHub; local reports remain available.")
     counts = {r["status"]: r["n"] for r in db.execute(
         "SELECT status,COUNT(*) AS n FROM pages GROUP BY status")}
     logging.info("UNIQUE URLS=%s | UPLOADED=%s | ROBOTS-DISALLOWED=%s | FAILED=%s",
