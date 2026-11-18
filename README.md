@@ -69,12 +69,12 @@ python zapier_sitemap_capture.py --no-lazy-scroll
 ## Output
 
 - GitHub screenshots: `screenshots/YYYY-MM/<page-slug>-<url-hash>.jpg`
-- Local count summary: `reports/latest_summary.json`
-- Local page inventory: `reports/pages.csv`
+- Count summary (local and GitHub): `reports/latest_summary.json`
+- Page inventory CSV (local and GitHub): `reports/pages.csv`
 - Local resume database: `data/progress.sqlite3`
 - Temporary images waiting for upload: `screenshots_tmp/`
 
-`data/`, `reports/`, and temporary screenshots are excluded from Git by `.gitignore`, so local run state and credentials are not committed. GitHub screenshot files remain in the remote repository after local deletion; the remote repository will therefore grow as more pages are captured.
+The run publishes the summary and CSV to GitHub after processing, using the Git Data API. Local `data/`, `reports/`, and temporary screenshot files remain excluded from normal Git commits by `.gitignore`; report files are uploaded explicitly by the script. GitHub screenshot files remain in the remote repository after local deletion, so the remote repository will grow as more pages are captured.
 
 ## Resume and storage behaviour
 
