@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+/data/*
+!/data/.gitkeep
+/reports/*
+!/reports/.gitkeep
+/screenshots_tmp/*
+!/screenshots_tmp/.gitkeep
+.DS_Store
+Thumbs.db
+.vscode/
