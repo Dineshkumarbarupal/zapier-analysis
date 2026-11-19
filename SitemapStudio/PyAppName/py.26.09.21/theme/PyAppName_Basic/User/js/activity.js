@@ -6,7 +6,7 @@ export function appendLog(message, type = "info", timestamp = Date.now() / 1000)
   const empty = container.querySelector(".empty-log");
   if (empty) empty.remove();
   const row = document.createElement("div");
-  const normalizedType = ["uploaded", "captured", "completed", "reports_uploaded", "connected"].includes(type)
+  const normalizedType = ["uploaded", "saved_local", "captured", "completed", "reports_uploaded", "reports_saved", "connected", "local_ready"].includes(type)
     ? "success"
     : (["fatal", "error"].includes(type) ? "error" : (["warning", "skipped", "stopped"].includes(type) ? "warning" : ""));
   row.className = `log-row ${normalizedType}`;
@@ -28,7 +28,7 @@ export function appendLog(message, type = "info", timestamp = Date.now() / 1000)
 export function clearLog() {
   const container = document.getElementById("activity-log");
   if (!container) return;
-  container.innerHTML = `<div class="empty-log"><span class="empty-log-icon">⌁</span><strong>No activity yet</strong><p>New discovery and upload events will appear here.</p></div>`;
+  container.innerHTML = `<div class="empty-log"><span class="empty-log-icon">⌁</span><strong>No activity yet</strong><p>Discovery, screenshot and save events will appear here.</p></div>`;
   logEntries = 0;
   const count = document.getElementById("log-count");
   if (count) count.textContent = "0 events";
