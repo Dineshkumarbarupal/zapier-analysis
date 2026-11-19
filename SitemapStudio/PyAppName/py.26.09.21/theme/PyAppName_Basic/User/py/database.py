@@ -156,7 +156,7 @@ class Database:
                          source_sitemap=excluded.source_sitemap,
                          job_id=excluded.job_id,
                          updated_at=excluded.updated_at,
-                         status=CASE WHEN pages.status='uploaded' THEN 'uploaded' WHEN pages.status='captured' THEN 'captured' ELSE 'discovered' END""",
+                         status=CASE WHEN pages.status IN ('uploaded','saved_local') THEN pages.status WHEN pages.status='captured' THEN 'captured' ELSE 'discovered' END""",
                     (url, repository, branch, source, "discovered", job_id, now),
                 )
 
@@ -247,18 +247,18 @@ class Database:
     def inventory_rows(self, job_id: str, limit: int = 100) -> list[dict[str, Any]]:
         with self.session() as db:
             rows = db.execute(
-                "SELECT url,source_sitemap,status,github_path,title,capture_mode,error FROM pages WHERE job_id=? ORDER BY url LIMIT ?",
+                "SELECT url,source_sitemap,status,github_path AS output_path,title,capture_mode,error FROM pages WHERE job_id=? ORDER BY url LIMIT ?",
                 (job_id, limit),
             ).fetchall()
             return [dict(row) for row in rows]
 
     def export_inventory_csv(self, job_id: str, path: str) -> tuple[int, dict[str, int]]:
-        fields = ["url", "source_sitemap", "status", "github_path", "title", "capture_mode", "error"]
+        fields = ["url", "source_sitemap", "status", "output_path", "title", "capture_mode", "error"]
         status_counts: dict[str, int] = {}
         total = 0
         with self.session() as db:
             cursor = db.execute(
-                "SELECT url,source_sitemap,status,github_path,title,capture_mode,error FROM pages WHERE job_id=? ORDER BY url",
+                "SELECT url,source_sitemap,status,github_path AS output_path,title,capture_mode,error FROM pages WHERE job_id=? ORDER BY url",
                 (job_id,),
             )
             with open(path, "w", newline="", encoding="utf-8-sig") as stream:
@@ -280,5 +280,5 @@ class Database:
         with self.session() as db:
             jobs = db.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"]
             pages = db.execute("SELECT COUNT(*) AS n FROM pages").fetchone()["n"]
-            uploaded = db.execute("SELECT COUNT(*) AS n FROM pages WHERE status='uploaded'").fetchone()["n"]
+            uploaded = db.execute("SELECT COUNT(*) AS n FROM pages WHERE status IN ('uploaded','saved_local')").fetchone()["n"]
             return {"jobs": jobs, "tracked_pages": pages, "uploaded_screenshots": uploaded}
