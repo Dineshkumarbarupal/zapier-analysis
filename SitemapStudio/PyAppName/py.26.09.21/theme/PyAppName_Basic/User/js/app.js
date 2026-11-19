@@ -264,7 +264,7 @@ async function stopScan() {
     toast(error.message || String(error), "error");
   } finally {
     button.disabled = false;
-    button.textContent = "Stop scan";
+    button.textContent = "Stop capture";
   }
 }
 
