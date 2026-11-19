@@ -243,7 +243,7 @@ class JobManager:
                 uploader.upload_reports(summary_path, csv_path)
                 self._emit("reports_uploaded", "Reports successfully published to GitHub: reports/latest_summary.json and reports/latest_pages.csv.gz")
             except Exception as exc:
-                logger.exception("Reports upload failed; local reports are retained.")
+                logger.warning("Reports upload failed; local reports are retained: %s", exc)
                 self._emit("warning", f"Could not publish reports to GitHub; local files are safe: {exc}")
                 if final_status == "completed":
                     final_status = "completed_with_warnings"
