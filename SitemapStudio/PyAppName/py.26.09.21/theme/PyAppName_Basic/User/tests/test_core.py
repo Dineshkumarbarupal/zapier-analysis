@@ -66,6 +66,43 @@ class GitHubRetryTests(unittest.TestCase):
         self.assertEqual(uploader.branch, "feature/screenshots")
 
 
+class StopDuringReportUploadTests(unittest.TestCase):
+    def test_final_reports_ignore_scan_cancel_event(self):
+        from threading import Event
+        from unittest.mock import Mock
+
+        uploader = GitHubUploader.__new__(GitHubUploader)
+        uploader.cancel_event = Event()
+        uploader.cancel_event.set()
+        uploader.upload_files = Mock(return_value="report-commit-sha")
+
+        result = uploader.upload_reports(Path("summary.json"), Path("pages.csv.gz"))
+
+        self.assertEqual(result, "report-commit-sha")
+        uploader.upload_files.assert_called_once()
+        self.assertFalse(uploader.upload_files.call_args.kwargs["respect_cancel"])
+
+    def test_screenshot_requests_still_stop_immediately(self):
+        from threading import Event
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = 0
+            def request(self, *args, **kwargs):
+                self.calls += 1
+                raise AssertionError("Cancelled request must not reach the network")
+
+        uploader = GitHubUploader.__new__(GitHubUploader)
+        uploader.session = FakeSession()
+        uploader.cancel_event = Event()
+        uploader.cancel_event.set()
+
+        with self.assertRaisesRegex(RuntimeError, "GitHub request cancelled"):
+            uploader.request("POST", "https://api.github.com/test", retry_writes=True)
+
+        self.assertEqual(uploader.session.calls, 0)
+
+
 class UrlNormalizationTests(unittest.TestCase):
     @patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value)
     def test_removes_fragment_and_normalizes_host(self, _validate):
