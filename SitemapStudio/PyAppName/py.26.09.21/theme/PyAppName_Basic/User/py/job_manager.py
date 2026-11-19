@@ -48,6 +48,7 @@ class JobManager:
                 pass
         with self._lock:
             self._runtime.update({"stage": event_type, "message": message})
+            self._runtime.update(data)
             if "current_url" in data:
                 self._runtime["current_url"] = data["current_url"]
 
@@ -79,7 +80,12 @@ class JobManager:
             job_id = str(uuid.uuid4())
             self.db.create_job(job_id, config)
             self._active_job_id = job_id
-            self._runtime = {"stage": "starting", "message": "Starting scan", "current_url": ""}
+            self._runtime = {
+                "stage": "starting", "message": "Starting scan", "current_url": "",
+                "processed_sitemaps": 0, "total_sitemaps": len(config.get("sitemap_urls", [])),
+                "raw_entries": 0, "unique_urls": 0, "discovery_complete": False,
+                "capture_current": 0, "capture_total": 0,
+            }
             self._thread = threading.Thread(
                 target=self._run_job,
                 args=(job_id, dict(config), token),
@@ -128,7 +134,25 @@ class JobManager:
             http = build_http_session(config["user_agent"])
             self.db.update_job(job_id, status="discovering", message="Reading sitemap files")
             self._emit("discovering", f"Reading {len(config['sitemap_urls'])} sitemap endpoint(s), including nested indexes…")
-            crawler = SitemapCrawler(http, self._cancel)
+            def on_discovery_progress(progress: dict) -> None:
+                phase = progress.get("phase", "parsing")
+                message = (
+                    f"Discovering URLs: {int(progress.get('unique_urls', 0)):,} unique URLs · "
+                    f"{int(progress.get('processed_sitemaps', 0)):,}/"
+                    f"{int(progress.get('total_sitemaps', 0)):,} sitemap files processed"
+                )
+                self._emit(
+                    "discovery_progress", message,
+                    processed_sitemaps=int(progress.get("processed_sitemaps", 0)),
+                    total_sitemaps=int(progress.get("total_sitemaps", 0)),
+                    raw_entries=int(progress.get("raw_entries", 0)),
+                    unique_urls=int(progress.get("unique_urls", 0)),
+                    current_sitemap=progress.get("current_sitemap", ""),
+                    discovery_phase=phase,
+                    discovery_complete=bool(progress.get("complete", False)),
+                )
+
+            crawler = SitemapCrawler(http, self._cancel, progress_callback=on_discovery_progress)
             discovered_summary = crawler.crawl(config["sitemap_urls"])
             for row in crawler.sitemap_stats:
                 self.db.save_sitemap_result(job_id, row["sitemap_url"], row["entry_count"], row["status"], row["error"])
@@ -143,6 +167,8 @@ class JobManager:
                 f"Discovery complete: {discovered_summary['raw_url_entries']:,} raw entries, {discovered_summary['unique_urls']:,} unique URLs.",
                 total_urls=len(urls), raw_entries=discovered_summary["raw_url_entries"],
                 unique_urls=discovered_summary["unique_urls"], sitemaps_read=discovered_summary["sitemap_files_read"],
+                processed_sitemaps=len(crawler.sitemap_stats), total_sitemaps=len(crawler.visited),
+                discovery_complete=True,
             )
             if crawler.errors:
                 for error in crawler.errors[:20]:
@@ -157,7 +183,9 @@ class JobManager:
             browser = BrowserCapture(output_dir=local_output_dir).start() if output_mode == "local" else BrowserCapture().start()
             pending_count = self.db.count_pending_pages(job_id, repository, branch, retry_failed=bool(config.get("retry_failed")))
             pending = self.db.iter_pending_pages(job_id, repository, branch, retry_failed=bool(config.get("retry_failed")))
-            self._emit("capturing", f"Preparing to capture {pending_count:,} pending page(s).", pending=pending_count)
+            self._emit("capturing", f"Preparing to capture {pending_count:,} pending page(s).",
+                       pending=pending_count, capture_current=0, capture_total=pending_count,
+                       discovery_complete=True)
             self.db.update_job(job_id, total_urls=len(urls), message=f"Capturing {pending_count} pending pages")
 
             for index, row in enumerate(pending, start=1):
@@ -166,7 +194,8 @@ class JobManager:
                 url = row["url"]
                 self.db.update_job(job_id, current_url=url, message=f"Processing {index:,} of {pending_count:,}")
                 self._emit("page", f"Processing {index:,}/{pending_count:,}: {url[:180]}", current_url=url,
-                           current=index, pending=pending_count)
+                           current=index, pending=pending_count,
+                           capture_current=index, capture_total=pending_count)
 
                 robots_delay = float(config["delay_seconds"])
                 existing_path = Path(row["screenshot_path"]) if row.get("screenshot_path") else None
