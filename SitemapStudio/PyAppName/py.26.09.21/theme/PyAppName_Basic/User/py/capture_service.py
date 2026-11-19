@@ -23,12 +23,14 @@ def image_name(url: str) -> str:
 
 
 class BrowserCapture:
-    def __init__(self, viewport: dict | None = None):
+    def __init__(self, viewport: dict | None = None, output_dir: Path | str | None = None):
         self.viewport = viewport or DEFAULT_VIEWPORT
+        self.output_dir = Path(output_dir).expanduser().resolve() if output_dir else TEMP_SCREENSHOT_DIR
         self._playwright = None
         self.browser: Browser | None = None
 
     def start(self):
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self._playwright = sync_playwright().start()
         self.browser = self._playwright.chromium.launch(headless=True)
         return self
@@ -45,8 +47,8 @@ class BrowserCapture:
                 max_full_page_height: int = 14000, full_page: bool = True) -> tuple[Path, str, str]:
         if not self.browser:
             raise RuntimeError("BrowserCapture has not been started")
-        TEMP_SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
-        target = TEMP_SCREENSHOT_DIR / image_name(url)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        target = self.output_dir / image_name(url)
         context = self.browser.new_context(
             viewport=self.viewport,
             device_scale_factor=1,
@@ -71,7 +73,6 @@ class BrowserCapture:
             if not is_safe_browser_request(final_url):
                 raise RuntimeError("Page redirected to a private or unsafe destination; navigation was blocked.")
 
-            # Trigger lazy images while keeping a bounded scroll distance.
             height = int(page.evaluate("() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"))
             if full_page:
                 bounded_height = min(height, max_full_page_height)
