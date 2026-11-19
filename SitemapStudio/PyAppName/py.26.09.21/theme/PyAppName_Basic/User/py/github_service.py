@@ -71,11 +71,26 @@ class GitHubUploader:
         self.base_tree_sha = ""
         self.preflight()
 
-    def request(self, method: str, url: str, *, expected_status=None, retry_writes: bool = False, **kwargs):
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        expected_status=None,
+        retry_writes: bool = False,
+        respect_cancel: bool = True,
+        **kwargs,
+    ):
+        """Send a GitHub request.
+
+        Scan cancellation applies to screenshot work. Final report publication passes
+        respect_cancel=False so a user-requested stop can still finish its small
+        cleanup/report transaction without raising a misleading cancellation error.
+        """
         last_error = None
         attempts = 5 if retry_writes or method.upper() == "GET" else 1
         for attempt in range(attempts):
-            if self.cancel_event and self.cancel_event.is_set():
+            if respect_cancel and self.cancel_event and self.cancel_event.is_set():
                 raise RuntimeError("GitHub request cancelled. Uncommitted local screenshots have been retained.")
             try:
                 response = self.session.request(method, url, timeout=(20, 120), **kwargs)
@@ -98,7 +113,7 @@ class GitHubUploader:
                 else:
                     wait = min(2 ** (attempt + 4), 60) if secondary_rate_limited else min(2 ** attempt, 20)
                 logger.warning("GitHub rate/temporary limit (%s). Retrying in %s seconds.", response.status_code, wait)
-                if self.cancel_event:
+                if respect_cancel and self.cancel_event:
                     if self.cancel_event.wait(wait):
                         raise RuntimeError("GitHub retry cancelled. Local screenshots are retained.")
                 else:
@@ -140,37 +155,55 @@ class GitHubUploader:
         self.base_tree_sha = commit["tree"]["sha"]
         return repo_info
 
-    def _publish_tree(self, entries: list[dict], message: str) -> str:
-        tree = self.request("POST", f"{self.api}/git/trees", retry_writes=True,
-                            json={"base_tree": self.base_tree_sha, "tree": entries})
-        commit = self.request("POST", f"{self.api}/git/commits", retry_writes=True,
-                              json={"message": message, "tree": tree["sha"], "parents": [self.head_sha]})
+    def _publish_tree(self, entries: list[dict], message: str, *, respect_cancel: bool = True) -> str:
+        tree = self.request(
+            "POST", f"{self.api}/git/trees", retry_writes=True, respect_cancel=respect_cancel,
+            json={"base_tree": self.base_tree_sha, "tree": entries},
+        )
+        commit = self.request(
+            "POST", f"{self.api}/git/commits", retry_writes=True, respect_cancel=respect_cancel,
+            json={"message": message, "tree": tree["sha"], "parents": [self.head_sha]},
+        )
         new_sha = commit["sha"]
         try:
-            self.request("PATCH", f"{self.api}/git/refs/heads/{quote(self.branch, safe='')}",
-                         json={"sha": new_sha, "force": False})
+            self.request(
+                "PATCH", f"{self.api}/git/refs/heads/{quote(self.branch, safe='')}",
+                respect_cancel=respect_cancel, json={"sha": new_sha, "force": False},
+            )
         except Exception as exc:
             # A timed-out PATCH may have succeeded server-side. Read the ref before retrying.
-            current = self.request("GET", f"{self.api}/git/ref/heads/{quote(self.branch, safe='')}")
+            current = self.request(
+                "GET", f"{self.api}/git/ref/heads/{quote(self.branch, safe='')}",
+                respect_cancel=respect_cancel,
+            )
             if current.get("object", {}).get("sha") != new_sha:
                 raise RuntimeError(f"Could not confirm GitHub branch update: {exc}") from exc
         self.head_sha = new_sha
         self.base_tree_sha = tree["sha"]
         return new_sha
 
-    def upload_files(self, files: list[tuple[Path, str]], message: str) -> str:
+    def upload_files(
+        self,
+        files: list[tuple[Path, str]],
+        message: str,
+        *,
+        respect_cancel: bool = True,
+    ) -> str:
         entries = []
         for local_path, remote_path in files:
             content = local_path.read_bytes()
             if len(content) > 20 * 1024 * 1024:
                 raise RuntimeError(f"File exceeds safe upload limit (20 MB): {local_path.name}")
             encoded = base64.b64encode(content).decode("ascii")
-            blob = self.request("POST", f"{self.api}/git/blobs", retry_writes=True,
-                                json={"content": encoded, "encoding": "base64"})
+            blob = self.request(
+                "POST", f"{self.api}/git/blobs", retry_writes=True,
+                respect_cancel=respect_cancel,
+                json={"content": encoded, "encoding": "base64"},
+            )
             entries.append({"path": remote_path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
         if not entries:
             return self.head_sha
-        return self._publish_tree(entries, message)
+        return self._publish_tree(entries, message, respect_cancel=respect_cancel)
 
     def screenshot_path(self, page_url: str, filename: str) -> str:
         month = datetime.now(timezone.utc).strftime("%Y-%m")
@@ -181,9 +214,14 @@ class GitHubUploader:
 
     def upload_reports(self, summary_path: Path, csv_path: Path) -> str:
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        # Final reports are a cleanup/finalization task, not continued scanning.
+        # Publish them even when the user has pressed Stop. The flag is disabled only
+        # for this small report transaction; screenshot capture and screenshot batches
+        # continue to observe the cancellation event.
         return self.upload_files(
             [(summary_path, "reports/latest_summary.json"), (csv_path, "reports/latest_pages.csv.gz")],
             f"Publish sitemap scan report ({stamp})",
+            respect_cancel=False,
         )
 
     def close(self) -> None:
