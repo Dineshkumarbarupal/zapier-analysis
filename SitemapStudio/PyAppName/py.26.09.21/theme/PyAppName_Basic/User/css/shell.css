@@ -1,0 +1,39 @@
+.app-frame { min-height: 100vh; display: flex; }
+.sidebar { width: 246px; flex: 0 0 246px; min-height: 100vh; background: rgba(13,18,25,.96); border-right: 1px solid var(--line); padding: 27px 16px 18px; display: flex; flex-direction: column; position: relative; z-index: 2; }
+.brand-lockup { display: flex; align-items: center; gap: 12px; padding: 0 10px 32px; }
+.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(145deg, #75e2ae, #278d6a); box-shadow: 0 7px 24px rgba(59,197,137,.2); transform: rotate(-4deg); }
+.brand-mark-inner { color: #062017; font: 800 21px var(--display); transform: rotate(4deg); }
+.brand-copy { display: flex; flex-direction: column; gap: 3px; }
+.brand-copy strong { font: 800 14px var(--display); letter-spacing: -.35px; }
+.brand-copy small { color: #748697; font: 500 8px var(--mono); letter-spacing: 1.15px; }
+.sidebar-section-label { color: #657588; font: 500 9px var(--mono); letter-spacing: 1.4px; padding: 0 12px 12px; }
+.side-nav { display: grid; gap: 5px; }
+.nav-item { height: 43px; width: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 9px; color: #9aa8b8; text-align: left; background: transparent; padding: 0 12px; transition: .18s ease; }
+.nav-item:hover { background: rgba(255,255,255,.035); color: var(--text); }
+.nav-item.active { background: linear-gradient(90deg, rgba(88,208,153,.13), rgba(88,208,153,.045)); border-color: rgba(99,215,161,.16); color: #dff8ec; box-shadow: inset 2px 0 #5bd49b; }
+.nav-item > span:nth-child(2) { font-weight: 600; flex: 1; }
+.nav-icon { color: #83d9ae; font-size: 18px; width: 19px; text-align: center; }
+.nav-item kbd { color: #647688; font: 10px var(--mono); }
+.sidebar-bottom { margin-top: auto; }
+.sidebar-tip { background: linear-gradient(145deg, rgba(56,126,99,.13), rgba(21,32,43,.42)); border: 1px solid rgba(102,193,151,.15); border-radius: 11px; padding: 13px 12px; display: flex; gap: 10px; margin: 0 2px 17px; }
+.tip-icon { font-size: 17px; color: var(--green); }
+.sidebar-tip strong { font-size: 11px; color: #d7eee2; }
+.sidebar-tip p { color: #8798a9; font-size: 10px; line-height: 1.55; margin: 5px 0 0; }
+.sidebar-version { border-top: 1px solid var(--line); padding: 16px 7px 0; color: #758497; font-size: 10px; display: flex; align-items: center; gap: 7px; }
+.version-number { margin-left: auto; font-family: var(--mono); font-size: 9px; color: #5d6a79; }
+.status-dot, .pulse-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--green); box-shadow: 0 0 0 3px rgba(99,215,161,.10); }
+.workspace { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+#topbar-slot { height: 67px; flex: 0 0 67px; border-bottom: 1px solid var(--line); background: rgba(12,17,24,.67); backdrop-filter: blur(14px); }
+.topbar-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 38px; }
+.breadcrumbs { display: flex; align-items: center; gap: 11px; color: #68798c; font-size: 11px; }
+.breadcrumbs strong { color: #dce5ee; font-weight: 600; }
+.crumb-slash { color: #435365; }
+.topbar-actions { display: flex; align-items: center; gap: 15px; }
+.connection-pill { display: flex; align-items: center; gap: 8px; color: #99a9b8; font-size: 10px; border: 1px solid var(--line); background: rgba(255,255,255,.025); border-radius: 30px; padding: 7px 11px; }
+.icon-button { width: 29px; height: 29px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: #a7b5c4; font: 600 12px var(--display); }
+.icon-button:hover { background: rgba(255,255,255,.06); color: white; }
+.avatar-mark { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 9px; background: #243b36; color: #a6e9c5; font: 700 9px var(--mono); border: 1px solid rgba(108,211,163,.16); }
+.main-content { padding: 30px 38px 45px; max-width: 1700px; width: 100%; margin: 0 auto; }
+.loading-state { height: 50vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--muted); }
+.loader { width: 27px; height: 27px; border: 2px solid rgba(99,215,161,.14); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

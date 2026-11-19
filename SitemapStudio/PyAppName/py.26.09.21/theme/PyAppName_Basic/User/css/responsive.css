@@ -1,0 +1,1 @@
+@media (max-width: 1250px) { .main-content { padding-left: 25px; padding-right: 25px; } .topbar-inner { padding: 0 25px; } .sidebar { width: 220px; flex-basis: 220px; } .dashboard-grid { grid-template-columns: minmax(500px,1fr) minmax(350px,.85fr); } .scan-panel, .activity-panel { padding: 18px; } }

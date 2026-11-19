@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg: #0b0e13;
+  --bg-soft: #10151d;
+  --panel: #121923;
+  --panel-2: #151e2a;
+  --panel-3: #192433;
+  --line: rgba(157, 178, 201, .13);
+  --line-strong: rgba(157, 178, 201, .22);
+  --text: #edf3fa;
+  --text-2: #a3b0bf;
+  --muted: #718092;
+  --green: #63d7a1;
+  --green-2: #2eb77d;
+  --green-soft: rgba(73, 204, 143, .12);
+  --blue: #7da9ff;
+  --red: #f17b83;
+  --amber: #e9b66e;
+  --shadow: 0 18px 60px rgba(0,0,0,.22);
+  --radius: 15px;
+  --font: 'DM Sans', 'Segoe UI', sans-serif;
+  --display: 'Manrope', 'Segoe UI', sans-serif;
+  --mono: 'DM Mono', Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-width: 1040px; min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; }
+body { min-height: 100vh; background-image: radial-gradient(ellipse at 72% -18%, rgba(47, 107, 91, .13), transparent 42%), linear-gradient(145deg, #0b0e13 0%, #0d1219 100%); }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
