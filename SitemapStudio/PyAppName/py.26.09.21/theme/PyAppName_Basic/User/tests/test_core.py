@@ -193,6 +193,74 @@ class SitemapParserTests(unittest.TestCase):
         self.assertEqual(result["sitemap_files_read"], 1)
 
 
+class SitemapResilienceTests(unittest.TestCase):
+    class Response:
+        status_code = 200
+        headers = {}
+        is_redirect = False
+        is_permanent_redirect = False
+
+        def __init__(self, url, content):
+            self.url = url
+            self.content = content
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size=1024 * 1024):
+            yield self.content
+
+        def close(self):
+            return None
+
+    class Session:
+        def __init__(self, documents):
+            self.documents = documents
+
+        def get(self, url, **kwargs):
+            return SitemapResilienceTests.Response(url, self.documents[url])
+
+    def test_empty_and_unexpected_xml_do_not_abort_remaining_sitemaps(self):
+        valid = b"""<?xml version='1.0'?>
+        <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
+          <url><loc>https://example.com/working</loc></url>
+        </urlset>"""
+        documents = {
+            "https://example.com/empty.xml": b"  \n ",
+            "https://example.com/html.xml": b"<html><body>Access denied</body></html>",
+            "https://example.com/good.xml": valid,
+        }
+        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \\
+             patch("py.sitemap_service.normalize_page_url", side_effect=lambda value: value):
+            crawler = SitemapCrawler(self.Session(documents))
+            result = crawler.crawl(list(documents))
+
+        self.assertEqual(result["unique_urls"], 1)
+        self.assertEqual(result["urls"]["https://example.com/working"], "https://example.com/good.xml")
+        self.assertEqual(len(result["errors"]), 2)
+        self.assertEqual([row["status"] for row in result["sitemap_stats"]], ["failed", "failed", "success"])
+        self.assertIn("empty", result["sitemap_stats"][0]["error"].lower())
+        self.assertIn("unexpected xml root", result["sitemap_stats"][1]["error"].lower())
+
+    def test_discovery_progress_callback_reports_url_counts(self):
+        valid = b"""<?xml version='1.0'?>
+        <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
+          <url><loc>https://example.com/a</loc></url>
+        </urlset>"""
+        events = []
+        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \\
+             patch("py.sitemap_service.normalize_page_url", side_effect=lambda value: value):
+            crawler = SitemapCrawler(
+                self.Session({"https://example.com/sitemap.xml": valid}),
+                progress_callback=events.append,
+            )
+            result = crawler.crawl(["https://example.com/sitemap.xml"])
+
+        self.assertEqual(result["unique_urls"], 1)
+        self.assertTrue(any(event.get("phase") == "finished" and event.get("complete") for event in events))
+        self.assertTrue(any(event.get("unique_urls") == 1 for event in events))
+
+
 class ReportExportTests(unittest.TestCase):
     def test_exports_full_csv_and_gzip_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
