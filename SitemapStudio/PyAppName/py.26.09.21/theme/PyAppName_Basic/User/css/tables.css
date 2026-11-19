@@ -33,3 +33,6 @@
 .toast.error { border-color: rgba(241,123,131,.3); }
 .toast.success { border-color: rgba(99,215,161,.3); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.status-badge.saved_local { color: #86dbae; background: rgba(99,215,161,.1); }
+.status-badge.preparing, .status-badge.validating { color: #a9c3f5; background: rgba(125,169,255,.09); }
