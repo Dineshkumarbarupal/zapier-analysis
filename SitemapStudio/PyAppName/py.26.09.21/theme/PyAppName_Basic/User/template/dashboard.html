@@ -118,8 +118,16 @@
     </div>
     <div class="scan-state-card">
       <div class="scan-state-top"><div><span class="state-label">CURRENT STATE</span><strong id="scan-state">Idle</strong></div><span class="state-icon" id="scan-state-icon">Ⅱ</span></div>
-      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-      <div class="progress-meta"><span id="progress-label">No active scan</span><strong id="progress-percent">0%</strong></div>
+      <div class="progress-stage">
+        <div class="progress-stage-heading"><span>01 · URL DISCOVERY</span><strong id="discovery-progress-percent">0%</strong></div>
+        <div class="progress-track"><div class="progress-fill discovery-progress-fill" id="discovery-progress-fill"></div></div>
+        <div class="progress-meta"><span id="discovery-progress-label">Waiting for sitemap scan</span><span id="discovery-progress-count">0 URLs</span></div>
+      </div>
+      <div class="progress-stage">
+        <div class="progress-stage-heading"><span>02 · SCREENSHOT CAPTURE</span><strong id="capture-progress-percent">0%</strong></div>
+        <div class="progress-track"><div class="progress-fill" id="capture-progress-fill"></div></div>
+        <div class="progress-meta"><span id="capture-progress-label">Waiting for URL discovery</span><span id="capture-progress-count">0 / 0 pages</span></div>
+      </div>
       <div class="progress-stats"><div><strong id="progress-uploaded">0</strong><span>saved</span></div><div><strong id="progress-skipped">0</strong><span>skipped</span></div><div><strong id="progress-failed">0</strong><span>failed</span></div></div>
     </div>
     <div class="activity-toolbar"><div><strong>Activity log</strong><span id="log-count">0 events</span></div><button class="text-button" type="button" id="clear-log">Clear log</button></div>
