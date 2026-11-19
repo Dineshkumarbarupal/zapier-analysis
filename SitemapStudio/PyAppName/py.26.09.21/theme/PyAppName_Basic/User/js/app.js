@@ -288,7 +288,9 @@ function updateDashboard(status) {
   const total = Number(job?.total_urls || 0);
   const done = saved + skipped + failed;
   const captureResolved = done + captured;
-  const capturePercent = total > 0 ? Math.min(100, Math.round((captureResolved / total) * 100)) : 0;
+  const captureCurrent = Number(status?.runtime?.capture_current || 0);
+  const captureTotal = Number(status?.runtime?.capture_total || total);
+  const capturePercent = captureTotal > 0 ? Math.min(100, Math.round((Math.max(captureCurrent, captureResolved) / captureTotal) * 100)) : 0;
   const runtime = status?.runtime || {};
   const discoveryTotal = Number(runtime.total_sitemaps || 0);
   const discoveryProcessed = Number(runtime.processed_sitemaps || 0);
@@ -311,12 +313,10 @@ function updateDashboard(status) {
   setText("capture-progress-label", total
     ? formatNumber(done) + " resolved · " + formatNumber(captured) + " waiting to save"
     : (discoveryComplete ? "Preparing screenshot capture" : "Waiting for URL discovery"));
-  setText("capture-progress-count", formatNumber(captureResolved) + " / " + formatNumber(total) + " pages");
+  setText("capture-progress-count", formatNumber(Math.max(captureCurrent, captureResolved)) + " / " + formatNumber(captureTotal) + " pages");
   setText("capture-progress-percent", capturePercent + "%");
   setText("progress-uploaded", formatNumber(saved));
   setText("progress-skipped", formatNumber(skipped));
-  setText("progress-failed", formatNumber(failed));
-  setText("activity-footer-text", running ? (status.runtime?.message || "Engine is working") : "Engine is ready for a new job");
   setText("progress-failed", formatNumber(failed));
   setText("activity-footer-text", running ? (status.runtime?.message || "Engine is working") : "Engine is ready for a new job");
   const discoveryBar = document.getElementById("discovery-progress-fill");
