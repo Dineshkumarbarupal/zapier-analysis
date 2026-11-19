@@ -59,7 +59,7 @@ class SitemapCrawler:
         self.progress_callback = progress_callback
         self.visited: set[str] = set()
         self.scheduled: set[str] = set()
-        self.urls: dict[str, str] =
+        self.urls: dict[str, str] = {}
         self.sitemap_stats: list[dict] = []
         self.errors: list[str] = []
         self.raw_entries = 0
