@@ -29,7 +29,7 @@ class JobManager:
         # A desktop process cannot continue a worker after it has been closed. Mark
         # unfinished jobs clearly; their uploaded/captured URL states remain resumable.
         last_job = self.db.get_job()
-        if last_job and last_job.get("status") in {"starting", "validating", "discovering", "capturing", "running", "stopping"}:
+        if last_job and last_job.get("status") in {"starting", "preparing", "validating", "discovering", "capturing", "running", "stopping"}:
             self.db.update_job(
                 last_job["id"], status="interrupted",
                 message="App closed before the scan completed. Start the same sitemap/repository again to resume pending URLs.",
