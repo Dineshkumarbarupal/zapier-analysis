@@ -51,16 +51,36 @@ def _xml_tag(element: ET.Element) -> str:
 
 
 class SitemapCrawler:
-    def __init__(self, session: requests.Session, cancel_event=None, max_sitemaps: int = 5000):
+    def __init__(self, session: requests.Session, cancel_event=None, max_sitemaps: int = 5000,
+                 progress_callback=None):
         self.session = session
         self.cancel_event = cancel_event
         self.max_sitemaps = max_sitemaps
+        self.progress_callback = progress_callback
         self.visited: set[str] = set()
         self.urls: dict[str, str] = {}
         self.sitemap_stats: list[dict] = []
         self.errors: list[str] = []
         self.raw_entries = 0
         self.xml_files_read = 0
+        self.discovered_sitemaps = 0
+        self.processed_sitemaps = 0
+
+    def _notify_progress(self, current_sitemap: str = "", **extra) -> None:
+        if not self.progress_callback:
+            return
+        payload = {
+            "current_sitemap": current_sitemap,
+            "processed_sitemaps": self.processed_sitemaps,
+            "total_sitemaps": self.discovered_sitemaps,
+            "raw_entries": self.raw_entries,
+            "unique_urls": len(self.urls),
+            **extra,
+        }
+        try:
+            self.progress_callback(payload)
+        except Exception:
+            logger.exception("Sitemap progress callback failed; continuing crawl")
 
     def _fetch_bytes(self, url: str) -> bytes:
         current = validate_public_url(url)
@@ -106,10 +126,14 @@ class SitemapCrawler:
         if len(self.visited) >= self.max_sitemaps:
             raise RuntimeError(f"Sitemap limit reached ({self.max_sitemaps}); increase it only if expected.")
         self.visited.add(sitemap_url)
+        self.discovered_sitemaps = max(self.discovered_sitemaps, len(self.visited))
         count = 0
+        self._notify_progress(sitemap_url, phase="fetching")
         try:
             content = self._fetch_bytes(sitemap_url)
             self.xml_files_read += 1
+            if not content or not content.strip():
+                raise ValueError("Sitemap response is empty; no XML document was returned.")
             # iterparse is used so large sitemap files do not require a full XML tree in memory.
             root_tag = None
             for event, element in ET.iterparse(io.BytesIO(content), events=("start", "end")):
@@ -126,9 +150,13 @@ class SitemapCrawler:
                     if loc:
                         try:
                             child_url = validate_public_url(loc)
+                            if child_url not in self.visited:
+                                self.discovered_sitemaps += 1
+                                self._notify_progress(sitemap_url, phase="index", next_sitemap=child_url)
                             self.crawl_one(child_url)
                         except Exception as exc:
                             self.errors.append(f"{loc}: {exc}")
+                            self._notify_progress(sitemap_url, phase="warning", warning=str(exc)[:300])
                     element.clear()
                 elif root_tag == "urlset" and current_tag == "url":
                     loc = next((node.text.strip() for node in element if _xml_tag(node) == "loc" and node.text), "")
@@ -138,18 +166,30 @@ class SitemapCrawler:
                         normalized = normalize_page_url(loc)
                         if normalized:
                             self.urls.setdefault(normalized, sitemap_url)
+                        if count % 100 == 0:
+                            self._notify_progress(sitemap_url, phase="parsing")
                     element.clear()
             if root_tag not in {"urlset", "sitemapindex"}:
-                raise ValueError(f"Unknown sitemap XML root: {root_tag}")
+                if root_tag is None:
+                    detail = "empty or whitespace-only response"
+                else:
+                    detail = f"unexpected XML root <{root_tag}> (expected <urlset> or <sitemapindex>)"
+                raise ValueError(f"Invalid sitemap document: {detail}. The endpoint may return an HTML block page or unsupported XML.")
+            self.processed_sitemaps += 1
             self.sitemap_stats.append({"sitemap_url": sitemap_url, "entry_count": count, "status": "success", "error": None})
+            self._notify_progress(sitemap_url, phase="completed")
             logger.info("Read sitemap %s (%s entries)", sitemap_url, count)
         except Exception as exc:
             message = str(exc)[:1000]
             self.errors.append(f"{sitemap_url}: {message}")
+            self.processed_sitemaps += 1
             self.sitemap_stats.append({"sitemap_url": sitemap_url, "entry_count": count, "status": "failed", "error": message})
-            logger.exception("Could not read sitemap %s", sitemap_url)
+            self._notify_progress(sitemap_url, phase="failed", warning=message)
+            logger.warning("Could not read sitemap %s: %s", sitemap_url, message)
 
     def crawl(self, sitemap_urls: list[str]) -> dict:
+        self.discovered_sitemaps = len(set(sitemap_urls))
+        self._notify_progress(phase="started")
         for sitemap_url in sitemap_urls:
             if self.cancel_event and self.cancel_event.is_set():
                 break
@@ -157,6 +197,8 @@ class SitemapCrawler:
                 self.crawl_one(sitemap_url)
             except Exception as exc:
                 self.errors.append(f"{sitemap_url}: {exc}")
+                self._notify_progress(sitemap_url, phase="failed", warning=str(exc)[:300])
+        self._notify_progress(phase="finished", complete=True)
         return {
             "unique_urls": len(self.urls),
             "raw_url_entries": self.raw_entries,
