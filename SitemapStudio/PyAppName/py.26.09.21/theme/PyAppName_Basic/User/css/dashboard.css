@@ -150,3 +150,14 @@ select.text-input { appearance: none; background-image: linear-gradient(45deg, t
   .choice-card { padding-left: 10px; padding-right: 10px; }
   .choice-copy small { font-size: 7px; }
 }
+
+
+/* Separate live progress indicators for sitemap discovery and screenshot capture. */
+.progress-stage { margin-top: 13px; }
+.progress-stage-heading { display: flex; justify-content: space-between; align-items: center; color: #789083; font: 500 8px var(--mono); letter-spacing: .8px; }
+.progress-stage-heading strong { color: #9ee2bd; font: 500 9px var(--mono); letter-spacing: 0; }
+.progress-stage .progress-track { margin: 7px 0 5px; }
+.discovery-progress-fill.is-active { width: 35% !important; animation: discovery-sweep 1.35s ease-in-out infinite alternate; }
+@keyframes discovery-sweep { from { transform: translateX(0); opacity: .7; } to { transform: translateX(185%); opacity: 1; } }
+.progress-meta { gap: 8px; }
+.progress-meta span { min-width: 0; overflow-wrap: anywhere; }
