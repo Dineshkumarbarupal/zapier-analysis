@@ -187,6 +187,7 @@ class SitemapParserTests(unittest.TestCase):
     @patch("py.sitemap_service.normalize_page_url", side_effect=lambda value: value.split("#", 1)[0])
     def test_counts_unique_sitemap_urls(self, _normalize, _validate):
         crawler = SitemapCrawler(self.FakeSession())
+        self.assertIsInstance(crawler.urls, dict)
         result = crawler.crawl(["https://example.com/sitemap.xml"])
         self.assertEqual(result["raw_url_entries"], 2)
         self.assertEqual(result["unique_urls"], 2)
