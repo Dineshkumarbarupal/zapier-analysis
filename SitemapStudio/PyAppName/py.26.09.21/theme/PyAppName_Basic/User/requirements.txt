@@ -1,0 +1,4 @@
+eel==0.18.2
+requests>=2.32.3,<3
+urllib3>=2.2,<3
+playwright>=1.50,<2
