@@ -127,6 +127,38 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(counts.get("uploaded"), 1)
             db.close_current_thread()
 
+    def test_local_screenshots_are_counted_and_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Database(Path(tmp) / "local.sqlite3")
+            config = {
+                "output_mode": "local",
+                "local_output_dir": str(Path(tmp) / "screenshots"),
+                "repository": "local:folder-hash",
+                "branch": "local",
+            }
+            db.create_job("local-job-1", config)
+            db.upsert_pages("local-job-1", "local:folder-hash", "local", {
+                "https://example.com/home": "https://example.com/sitemap.xml"
+            })
+            saved_path = str(Path(tmp) / "screenshots" / "home.jpg")
+            db.update_page(
+                "https://example.com/home", "local:folder-hash", "local",
+                status="saved_local", screenshot_path=saved_path,
+                github_path=saved_path, title="Home"
+            )
+            self.assertEqual(db.metrics()["uploaded_screenshots"], 1)
+
+            db.create_job("local-job-2", config)
+            db.upsert_pages("local-job-2", "local:folder-hash", "local", {
+                "https://example.com/home": "https://example.com/sitemap.xml"
+            })
+            counts = db.page_counts("local:folder-hash", "local", "local-job-2")
+            self.assertEqual(counts.get("saved_local"), 1)
+            self.assertEqual(db.count_pending_pages("local-job-2", "local:folder-hash", "local"), 0)
+            inventory = db.inventory_rows("local-job-2", 10)
+            self.assertEqual(inventory[0]["output_path"], saved_path)
+            db.close_current_thread()
+
 
 class SitemapParserTests(unittest.TestCase):
     class FakeResponse:
