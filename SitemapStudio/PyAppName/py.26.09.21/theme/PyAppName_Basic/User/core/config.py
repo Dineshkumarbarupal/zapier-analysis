@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 APP_NAME = "Sitemap Studio"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 USER_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = USER_DIR / "data"
 DB_DIR = USER_DIR / "db"
@@ -22,6 +22,7 @@ DEFAULTS = {
     "settle_ms": 1200,
     "screenshot_quality": 75,
     "max_full_page_height": 14000,
+    "capture_all_urls": True,
     "max_urls": 0,
     "user_agent": DEFAULT_USER_AGENT,
 }
