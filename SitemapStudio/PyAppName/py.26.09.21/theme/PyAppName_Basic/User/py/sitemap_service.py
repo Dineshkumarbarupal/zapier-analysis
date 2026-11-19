@@ -58,7 +58,8 @@ class SitemapCrawler:
         self.max_sitemaps = max_sitemaps
         self.progress_callback = progress_callback
         self.visited: set[str] = set()
-        self.urls: dict[str, str] = {}
+        self.scheduled: set[str] = set()
+        self.urls: dict[str, str] =
         self.sitemap_stats: list[dict] = []
         self.errors: list[str] = []
         self.raw_entries = 0
@@ -150,8 +151,9 @@ class SitemapCrawler:
                     if loc:
                         try:
                             child_url = validate_public_url(loc)
-                            if child_url not in self.visited:
-                                self.discovered_sitemaps += 1
+                            if child_url not in self.scheduled:
+                                self.scheduled.add(child_url)
+                                self.discovered_sitemaps = len(self.scheduled)
                                 self._notify_progress(sitemap_url, phase="index", next_sitemap=child_url)
                             self.crawl_one(child_url)
                         except Exception as exc:
@@ -188,7 +190,8 @@ class SitemapCrawler:
             logger.warning("Could not read sitemap %s: %s", sitemap_url, message)
 
     def crawl(self, sitemap_urls: list[str]) -> dict:
-        self.discovered_sitemaps = len(set(sitemap_urls))
+        self.scheduled = set(sitemap_urls)
+        self.discovered_sitemaps = len(self.scheduled)
         self._notify_progress(phase="started")
         for sitemap_url in sitemap_urls:
             if self.cancel_event and self.cancel_event.is_set():
