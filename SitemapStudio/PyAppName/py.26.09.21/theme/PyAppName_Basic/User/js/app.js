@@ -292,7 +292,8 @@ function updateDashboard(status) {
   setText("metric-tracked", formatNumber(metrics.tracked_pages || tracked));
   setText("metric-uploaded", formatNumber(metrics.uploaded_screenshots || saved));
   setText("metric-jobs", formatNumber(metrics.jobs || 0));
-  setText("metric-engine", running ? "Working" : (job?.status === "completed" ? "Complete" : "Ready"));
+  const completed = ["completed", "completed_with_errors", "completed_with_warnings"].includes(job?.status);
+  setText("metric-engine", running ? "Working" : (completed ? "Complete" : "Ready"));
   setText("metric-engine-detail", running ? (status.runtime?.message || "Processing pages") : (job?.message || "Waiting for a scan"));
   setText("scan-state", running ? capitalize(status.runtime?.stage || "running") : capitalize(job?.status || "idle"));
   setText("progress-label", total ? `${formatNumber(done)} of ${formatNumber(total)} pages resolved · ${formatNumber(captured)} waiting to save` : "No active capture");
@@ -304,7 +305,7 @@ function updateDashboard(status) {
   const bar = document.getElementById("progress-fill");
   if (bar) bar.style.width = `${percent}%`;
   const stateIcon = document.getElementById("scan-state-icon");
-  if (stateIcon) stateIcon.textContent = running ? "◌" : (job?.status === "completed" ? "✓" : "Ⅱ");
+  if (stateIcon) stateIcon.textContent = running ? "◌" : (completed ? "✓" : "Ⅱ");
   setBusy(running);
 }
 
