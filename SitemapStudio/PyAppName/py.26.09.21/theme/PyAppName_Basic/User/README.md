@@ -8,14 +8,12 @@ A modular Windows desktop app built with HTML, CSS, JavaScript, Python, Eel, SQL
 2. Open PowerShell in this directory.
 3. Create an environment and install dependencies:
 
-\`\`\`powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python -m playwright install chromium
-python main.py
-\`\`\`
+    py -3 -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    python -m playwright install chromium
+    python main.py
 
 Alternatively, double-click run_windows.bat.
 
