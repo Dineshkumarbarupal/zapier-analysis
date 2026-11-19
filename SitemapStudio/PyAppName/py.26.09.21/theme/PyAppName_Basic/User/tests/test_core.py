@@ -230,7 +230,7 @@ class SitemapResilienceTests(unittest.TestCase):
             "https://example.com/html.xml": b"<html><body>Access denied</body></html>",
             "https://example.com/good.xml": valid,
         }
-        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \\
+        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \
              patch("py.sitemap_service.normalize_page_url", side_effect=lambda value: value):
             crawler = SitemapCrawler(self.Session(documents))
             result = crawler.crawl(list(documents))
@@ -248,7 +248,7 @@ class SitemapResilienceTests(unittest.TestCase):
           <url><loc>https://example.com/a</loc></url>
         </urlset>"""
         events = []
-        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \\
+        with patch("py.sitemap_service.validate_public_url", side_effect=lambda value: value), \
              patch("py.sitemap_service.normalize_page_url", side_effect=lambda value: value):
             crawler = SitemapCrawler(
                 self.Session({"https://example.com/sitemap.xml": valid}),
