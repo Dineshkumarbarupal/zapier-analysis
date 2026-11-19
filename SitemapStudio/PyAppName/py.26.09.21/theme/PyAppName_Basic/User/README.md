@@ -32,3 +32,8 @@ Enter one or more sitemap URLs (one per line), a GitHub repository URL, branch, 
 Only public sitemap URLs are discovered. These are not guaranteed to correspond to unique in-app screens; private dashboards, editor states, dialogs and authenticated pages absent from sitemaps are not discovered. The app does not bypass authentication, CAPTCHAs, bot challenges, robots rules or access controls. Large URL inventories can generate many screenshots and substantial GitHub storage usage.
 
 Eel is used because it is the requested bridge. Its upstream repository is archived; review dependencies and plan a maintained migration path before commercial enterprise distribution.
+
+
+## Stop button and final reports
+
+Pressing **Stop scan** cancels sitemap/page processing and screenshot batch uploads. Any screenshot that has not received a confirmed GitHub branch commit stays on disk for recovery. Once the worker has stopped processing pages, it still attempts to publish the partial JSON summary and compressed CSV inventory. Final report publication deliberately does not inherit the scan cancellation flag; a temporary report upload failure is shown as a warning and local report files are retained. This avoids treating a normal user stop as a failed GitHub request.
