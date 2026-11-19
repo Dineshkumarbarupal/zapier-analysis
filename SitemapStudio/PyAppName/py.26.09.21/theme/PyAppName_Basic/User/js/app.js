@@ -287,8 +287,13 @@ function updateDashboard(status) {
   const captured = Number(counts.captured || 0);
   const total = Number(job?.total_urls || 0);
   const done = saved + skipped + failed;
-  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-
+  const captureResolved = done + captured;
+  const capturePercent = total > 0 ? Math.min(100, Math.round((captureResolved / total) * 100)) : 0;
+  const runtime = status?.runtime || {};
+  const discoveryTotal = Number(runtime.total_sitemaps || 0);
+  const discoveryProcessed = Number(runtime.processed_sitemaps || 0);
+  const discoveryComplete = Boolean(runtime.discovery_complete) || ["discovered", "capturing", "page", "captured", "saved_local", "uploaded", "completed", "stopped"].includes(runtime.stage);
+  const discoveryPercent = discoveryComplete ? 100 : (discoveryTotal > 0 ? Math.min(99, Math.round((discoveryProcessed / discoveryTotal) * 100)) : 0);
   setText("metric-tracked", formatNumber(metrics.tracked_pages || tracked));
   setText("metric-uploaded", formatNumber(metrics.uploaded_screenshots || saved));
   setText("metric-jobs", formatNumber(metrics.jobs || 0));
@@ -296,14 +301,31 @@ function updateDashboard(status) {
   setText("metric-engine", running ? "Working" : (completed ? "Complete" : "Ready"));
   setText("metric-engine-detail", running ? (status.runtime?.message || "Processing pages") : (job?.message || "Waiting for a scan"));
   setText("scan-state", running ? capitalize(status.runtime?.stage || "running") : capitalize(job?.status || "idle"));
-  setText("progress-label", total ? `${formatNumber(done)} of ${formatNumber(total)} pages resolved · ${formatNumber(captured)} waiting to save` : "No active capture");
-  setText("progress-percent", `${percent}%`);
+  setText("discovery-progress-label", discoveryComplete
+    ? "Discovery complete · " + formatNumber(runtime.processed_sitemaps || discoveryProcessed) + " sitemap files processed"
+    : (running && (job?.status === "discovering" || String(runtime.stage || "").startsWith("discovery"))
+      ? "Reading sitemap files · " + formatNumber(runtime.processed_sitemaps || 0) + " / " + formatNumber(runtime.total_sitemaps || 0) + " processed"
+      : "Waiting for sitemap scan"));
+  setText("discovery-progress-count", formatNumber(runtime.unique_urls || 0) + " URLs found");
+  setText("discovery-progress-percent", discoveryPercent + "%");
+  setText("capture-progress-label", total
+    ? formatNumber(done) + " resolved · " + formatNumber(captured) + " waiting to save"
+    : (discoveryComplete ? "Preparing screenshot capture" : "Waiting for URL discovery"));
+  setText("capture-progress-count", formatNumber(captureResolved) + " / " + formatNumber(total) + " pages");
+  setText("capture-progress-percent", capturePercent + "%");
   setText("progress-uploaded", formatNumber(saved));
   setText("progress-skipped", formatNumber(skipped));
   setText("progress-failed", formatNumber(failed));
   setText("activity-footer-text", running ? (status.runtime?.message || "Engine is working") : "Engine is ready for a new job");
-  const bar = document.getElementById("progress-fill");
-  if (bar) bar.style.width = `${percent}%`;
+  setText("progress-failed", formatNumber(failed));
+  setText("activity-footer-text", running ? (status.runtime?.message || "Engine is working") : "Engine is ready for a new job");
+  const discoveryBar = document.getElementById("discovery-progress-fill");
+  if (discoveryBar) {
+    discoveryBar.style.width = discoveryPercent + "%";
+    discoveryBar.classList.toggle("is-active", running && !discoveryComplete && (job?.status === "discovering" || String(runtime.stage || "").startsWith("discovery")));
+  }
+  const captureBar = document.getElementById("capture-progress-fill");
+  if (captureBar) captureBar.style.width = capturePercent + "%";
   const stateIcon = document.getElementById("scan-state-icon");
   if (stateIcon) stateIcon.textContent = running ? "◌" : (completed ? "✓" : "Ⅱ");
   setBusy(running);
