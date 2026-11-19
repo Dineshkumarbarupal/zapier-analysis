@@ -94,28 +94,36 @@ class JobManager:
             if not self._thread or not self._thread.is_alive():
                 return {"stopped": False, "message": "No active scan."}
             self._cancel.set()
-        self._emit("stopping", "Stop requested. Already committed screenshots remain on GitHub; uncommitted images will be retained locally for resume.")
+        self._emit("stopping", "Stop requested. Screenshots already saved to the selected destination are safe; unfinished work will stop at the next safe point.")
         return {"stopped": True, "message": "Stop requested."}
 
     def _run_job(self, job_id: str, config: dict, token: str) -> None:
         uploader: GitHubUploader | None = None
         browser: BrowserCapture | None = None
         http = None
+        output_mode = config.get("output_mode", "github")
         repository = config["repository"]
         branch = config["branch"]
+        local_output_dir = Path(config["local_output_dir"]).expanduser().resolve() if output_mode == "local" else None
         batch: list[tuple[str, Path, str]] = []
         uploaded_this_run = 0
         skipped_this_run = 0
         failed_this_run = 0
         discovered_summary: dict = {}
         try:
-            self.db.update_job(job_id, status="validating", message="Validating GitHub access")
-            self._emit("validating", "Checking GitHub repository access and branch…")
-            uploader = GitHubUploader(config["repository_url"], token, branch, cancel_event=self._cancel)
-            token = ""
-            if uploader.repository.lower() != repository.lower():
-                raise RuntimeError("Internal repository validation mismatch.")
-            self._emit("connected", f"GitHub connected: {repository} / {branch}", repository=repository, branch=branch)
+            if output_mode == "github":
+                self.db.update_job(job_id, status="validating", message="Validating GitHub access")
+                self._emit("validating", "Checking GitHub repository access and branch…")
+                uploader = GitHubUploader(config["repository_url"], token, branch, cancel_event=self._cancel)
+                token = ""
+                if uploader.repository.lower() != repository.lower():
+                    raise RuntimeError("Internal repository validation mismatch.")
+                self._emit("connected", f"GitHub connected: {repository} / {branch}", repository=repository, branch=branch)
+            else:
+                token = ""
+                local_output_dir.mkdir(parents=True, exist_ok=True)
+                self.db.update_job(job_id, status="preparing", message="Preparing local screenshot folder")
+                self._emit("local_ready", f"Local screenshot destination ready: {local_output_dir}", output_dir=str(local_output_dir))
 
             http = build_http_session(config["user_agent"])
             self.db.update_job(job_id, status="discovering", message="Reading sitemap files")
@@ -146,7 +154,7 @@ class JobManager:
                 raise InterruptedError("Scan stopped during sitemap discovery.")
 
             robots = RobotsPolicy(http, config["user_agent"], float(config["delay_seconds"]))
-            browser = BrowserCapture().start()
+            browser = BrowserCapture(output_dir=local_output_dir).start() if output_mode == "local" else BrowserCapture().start()
             pending_count = self.db.count_pending_pages(job_id, repository, branch, retry_failed=bool(config.get("retry_failed")))
             pending = self.db.iter_pending_pages(job_id, repository, branch, retry_failed=bool(config.get("retry_failed")))
             self._emit("capturing", f"Preparing to capture {pending_count:,} pending page(s).", pending=pending_count)
@@ -163,9 +171,16 @@ class JobManager:
                 robots_delay = float(config["delay_seconds"])
                 existing_path = Path(row["screenshot_path"]) if row.get("screenshot_path") else None
                 if row["status"] == "captured" and existing_path and existing_path.exists():
-                    remote = row["github_path"] or uploader.screenshot_path(url, existing_path.name)
-                    batch.append((url, existing_path, remote))
-                    self._emit("recovered", f"Recovered an uncommitted screenshot: {url[:150]}")
+                    if output_mode == "github":
+                        remote = row["github_path"] or uploader.screenshot_path(url, existing_path.name)
+                        batch.append((url, existing_path, remote))
+                        self._emit("recovered", f"Recovered an uncommitted screenshot: {url[:150]}")
+                    else:
+                        local_path = str(existing_path.resolve())
+                        self.db.update_page(url, repository, branch, status="saved_local",
+                                            screenshot_path=local_path, github_path=local_path, error=None)
+                        uploaded_this_run += 1
+                        self._emit("saved_local", f"Recovered an existing local screenshot: {url[:150]}")
                 else:
                     try:
                         permitted, robots_delay = robots.check(url)
@@ -188,18 +203,27 @@ class JobManager:
                             quality=int(config["screenshot_quality"]),
                             max_full_page_height=int(config["max_full_page_height"]),
                         )
-                        remote = uploader.screenshot_path(url, path.name)
-                        self.db.update_page(url, repository, branch, status="captured", screenshot_path=str(path),
-                                            github_path=remote, title=title, capture_mode=mode, error=None)
-                        batch.append((url, path, remote))
-                        self._emit("captured", f"Screenshot captured: {title or url[:120]}", current_url=url, mode=mode)
+                        if output_mode == "github":
+                            remote = uploader.screenshot_path(url, path.name)
+                            self.db.update_page(url, repository, branch, status="captured", screenshot_path=str(path),
+                                                github_path=remote, title=title, capture_mode=mode, error=None)
+                            batch.append((url, path, remote))
+                            self._emit("captured", f"Screenshot captured: {title or url[:120]}", current_url=url, mode=mode)
+                        else:
+                            local_path = str(path.resolve())
+                            self.db.update_page(url, repository, branch, status="saved_local",
+                                                screenshot_path=local_path, github_path=local_path,
+                                                title=title, capture_mode=mode, error=None)
+                            uploaded_this_run += 1
+                            self._emit("saved_local", f"Screenshot saved on this PC: {title or url[:120]}",
+                                       current_url=url, path=local_path, mode=mode)
                     except Exception as exc:
                         failed_this_run += 1
                         self.db.update_page(url, repository, branch, status="failed", screenshot_path=None,
                                             error=str(exc)[:1500])
                         self._emit("error", f"Capture failed for {url[:140]}: {str(exc)[:250]}", failed=failed_this_run)
 
-                if len(batch) >= int(config["batch_size"]) and not self._cancel.is_set():
+                if output_mode == "github" and len(batch) >= int(config["batch_size"]) and not self._cancel.is_set():
                     uploaded_this_run += self._commit_batch(uploader, batch, repository, branch, job_id)
                     batch.clear()
                 self._update_counters(job_id, uploaded_this_run, skipped_this_run, failed_this_run)
@@ -217,16 +241,29 @@ class JobManager:
 
             if self._cancel.is_set():
                 final_status = "stopped"
-                message = "Stopped safely. Uploaded batches are committed; uncommitted local captures are retained for resume."
+                message = (
+                    "Stopped safely. Screenshots already saved to the selected local folder remain available."
+                    if output_mode == "local"
+                    else "Stopped safely. Uploaded batches are committed; uncommitted local captures are retained for resume."
+                )
                 self._emit("stopped", message)
             else:
                 final_status = "completed" if failed_this_run == 0 else "completed_with_errors"
-                message = "Scan completed." if failed_this_run == 0 else "Scan completed with some failed pages."
+                message = (
+                    "Local screenshot capture completed."
+                    if output_mode == "local" and failed_this_run == 0
+                    else "Local screenshot capture completed with some failed pages."
+                    if output_mode == "local"
+                    else "Scan completed." if failed_this_run == 0
+                    else "Scan completed with some failed pages."
+                )
                 self._emit("completed", message)
 
             counts = self.db.page_counts(repository, branch, job_id)
             summary = {
                 "job_id": job_id,
+                "output_mode": output_mode,
+                "destination": str(local_output_dir) if output_mode == "local" else f"{repository}/{branch}",
                 "repository": repository,
                 "branch": branch,
                 "sitemap_urls_submitted": config["sitemap_urls"],
@@ -238,16 +275,19 @@ class JobManager:
                 "database_status_counts": counts,
             }
             summary_path, csv_path = create_reports(self.db, job_id, summary)
-            try:
-                self._emit("reports", "Uploading count summary and page inventory to GitHub…")
-                uploader.upload_reports(summary_path, csv_path)
-                self._emit("reports_uploaded", "Reports successfully published to GitHub: reports/latest_summary.json and reports/latest_pages.csv.gz")
-            except Exception as exc:
-                logger.warning("Reports upload failed; local reports are retained: %s", exc)
-                self._emit("warning", f"Could not publish reports to GitHub; local files are safe: {exc}")
-                if final_status == "completed":
-                    final_status = "completed_with_warnings"
-                    message = "Scan completed, but report publishing failed. The local reports are retained."
+            if uploader:
+                try:
+                    self._emit("reports", "Uploading count summary and page inventory to GitHub…")
+                    uploader.upload_reports(summary_path, csv_path)
+                    self._emit("reports_uploaded", "Reports successfully published to GitHub: reports/latest_summary.json and reports/latest_pages.csv.gz")
+                except Exception as exc:
+                    logger.warning("Reports upload failed; local reports are retained: %s", exc)
+                    self._emit("warning", f"Could not publish reports to GitHub; local files are safe: {exc}")
+                    if final_status == "completed":
+                        final_status = "completed_with_warnings"
+                        message = "Scan completed, but report publishing failed. The local reports are retained."
+            else:
+                self._emit("reports_saved", f"Local reports are available in the app data folder: {summary_path.parent}")
             self.db.update_job(job_id, status=final_status, uploaded=uploaded_this_run,
                                skipped=skipped_this_run, failed=failed_this_run,
                                current_url="", message=message)
