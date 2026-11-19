@@ -28,16 +28,55 @@ async function mountPartial(elementId, path) {
   document.getElementById(elementId).innerHTML = await response.text();
 }
 
+function selectedOutputMode() {
+  return document.querySelector('input[name="output-mode"]:checked')?.value || "local";
+}
+
+function selectedCaptureAll() {
+  return document.querySelector('input[name="capture-scope"]:checked')?.value !== "limit";
+}
+
+function syncDestinationMode() {
+  const mode = selectedOutputMode();
+  const localPanel = document.getElementById("local-destination");
+  const githubPanel = document.getElementById("github-destination");
+  localPanel?.classList.toggle("hidden", mode !== "local");
+  githubPanel?.classList.toggle("hidden", mode !== "github");
+  document.querySelectorAll("[data-destination-card]").forEach((card) => {
+    card.classList.toggle("is-selected", card.dataset.destinationCard === mode);
+  });
+  const validate = document.getElementById("validate-button");
+  if (validate) {
+    validate.classList.toggle("hidden", mode !== "github");
+    validate.disabled = Boolean(state.lastStatus?.running);
+  }
+}
+
+function syncCaptureScope() {
+  const captureAll = selectedCaptureAll();
+  const limitField = document.getElementById("url-limit-field");
+  const limitInput = document.getElementById("max-urls");
+  limitField?.classList.toggle("hidden", captureAll);
+  if (limitInput) limitInput.disabled = captureAll;
+  document.querySelectorAll("[data-scope-card]").forEach((card) => {
+    card.classList.toggle("is-selected", card.dataset.scopeCard === (captureAll ? "all" : "limit"));
+  });
+}
+
 function parseForm() {
   const urls = document.getElementById("sitemap-urls").value.trim();
+  const captureAll = selectedCaptureAll();
   return {
     sitemap_urls: urls,
+    output_mode: selectedOutputMode(),
+    local_output_dir: document.getElementById("local-output-dir").value.trim(),
     repository_url: document.getElementById("repository-url").value.trim(),
     branch: document.getElementById("branch-name").value.trim() || "main",
     github_token: document.getElementById("github-token").value,
     batch_size: Number(document.getElementById("batch-size").value),
     delay_seconds: Number(document.getElementById("delay-seconds").value),
-    max_urls: Number(document.getElementById("max-urls").value || 0),
+    capture_all_urls: captureAll,
+    max_urls: captureAll ? 0 : Number(document.getElementById("max-urls").value || 0),
     settle_ms: Number(document.getElementById("settle-ms").value),
     screenshot_quality: Number(document.getElementById("quality").value),
     max_full_page_height: Number(document.getElementById("max-height").value),
@@ -50,10 +89,10 @@ function setBusy(busy) {
   const validate = document.getElementById("validate-button");
   const stop = document.getElementById("stop-button");
   if (start) start.disabled = busy;
-  if (validate) validate.disabled = busy;
+  if (validate) validate.disabled = busy || selectedOutputMode() !== "github";
   if (stop) stop.classList.toggle("hidden", !busy);
   const connection = document.getElementById("connection-pill");
-  if (connection) connection.innerHTML = `<span class="status-dot"></span><span>${busy ? "Scan running" : "Desktop ready"}</span>`;
+  if (connection) connection.innerHTML = `<span class="status-dot"></span><span>${busy ? "Capture running" : "Desktop ready"}</span>`;
 }
 
 async function startPage(page) {
@@ -91,6 +130,33 @@ function wireDashboard() {
     document.getElementById("sitemap-urls").value = SAMPLE_SITEMAPS;
     toast("Loaded the 10 Zapier sitemap examples.", "success");
   });
+  document.querySelectorAll('input[name="output-mode"]').forEach((radio) => {
+    radio.addEventListener("change", syncDestinationMode);
+  });
+  document.querySelectorAll('input[name="capture-scope"]').forEach((radio) => {
+    radio.addEventListener("change", syncCaptureScope);
+  });
+  document.getElementById("browse-local-folder")?.addEventListener("click", async () => {
+    const button = document.getElementById("browse-local-folder");
+    button.disabled = true;
+    button.textContent = "Opening…";
+    try {
+      const result = await backend("choose_local_folder");
+      if (result.ok && result.path) {
+        document.getElementById("local-output-dir").value = result.path;
+        toast("Local screenshot folder selected.", "success");
+      } else if (!result.cancelled) {
+        setFormMessage(result.error || "Could not choose a folder.", "error");
+      }
+    } catch (error) {
+      setFormMessage(error.message || String(error), "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Browse folders";
+    }
+  });
+  syncDestinationMode();
+  syncCaptureScope();
   document.getElementById("toggle-advanced")?.addEventListener("click", () => {
     const advanced = document.getElementById("advanced-settings");
     advanced.classList.toggle("hidden");
@@ -104,6 +170,10 @@ function wireDashboard() {
 async function validateGitHub() {
   const button = document.getElementById("validate-button");
   const payload = parseForm();
+  if (payload.output_mode !== "github") {
+    setFormMessage("Select GitHub as the destination to test its connection.", "error");
+    return;
+  }
   if (!payload.github_token) {
     setFormMessage("Enter a GitHub token first.", "error");
     return;
@@ -134,37 +204,52 @@ async function startScan() {
   const button = document.getElementById("start-button");
   const payload = parseForm();
   if (!payload.sitemap_urls) return setFormMessage("Add at least one sitemap URL.", "error");
-  if (!payload.repository_url) return setFormMessage("Enter the GitHub repository URL.", "error");
-  if (!payload.github_token) return setFormMessage("Enter a GitHub token. The token is not saved by this app.", "error");
-  if (payload.max_urls === 0) {
-    const proceed = window.confirm(
-      "Unlimited scan selected. Some sitemaps contain hundreds of thousands of URLs. Capturing every page can take a long time, consume GitHub API quota, and create a very large repository. Continue?"
-    );
-    if (!proceed) return;
+
+  if (payload.output_mode === "local" && !payload.local_output_dir) {
+    return setFormMessage("Choose a folder on this PC for the screenshots.", "error");
   }
+  if (payload.output_mode === "github" && !payload.repository_url) {
+    return setFormMessage("Enter the GitHub repository URL.", "error");
+  }
+  if (payload.output_mode === "github" && !payload.github_token) {
+    return setFormMessage("Enter a GitHub token. The token is not saved by this app.", "error");
+  }
+  if (!payload.capture_all_urls && (!Number.isInteger(payload.max_urls) || payload.max_urls < 1)) {
+    return setFormMessage("Enter a valid URL limit, or select Full sitemap.", "error");
+  }
+  if (payload.capture_all_urls) {
+    const destinationWarning = payload.output_mode === "github"
+      ? "A full sitemap capture may include hundreds of thousands of URLs, take a long time, use GitHub API quota and create a large repository."
+      : "A full sitemap capture may include hundreds of thousands of URLs, take a long time and use significant disk space in the selected folder.";
+    if (!window.confirm(`Full sitemap capture is selected. ${destinationWarning} Continue?`)) return;
+  }
+
   button.disabled = true;
   button.querySelector("span:first-child").textContent = "Starting…";
-  setFormMessage("Validating settings and starting the scan…");
+  setFormMessage("Validating settings and starting the capture job…");
   try {
     const result = await backend("start_job", payload);
     document.getElementById("github-token").value = "";
     if (!result.ok) {
-      setFormMessage(result.error || "Could not start scan.", "error");
-      toast(result.error || "Could not start scan.", "error");
+      setFormMessage(result.error || "Could not start capture.", "error");
+      toast(result.error || "Could not start capture.", "error");
       return;
     }
     state.currentJobId = result.job_id;
     clearLog();
-    appendLog(`Job ${result.job_id} created. Initializing browser and GitHub connection…`, "info");
-    setFormMessage(`Scan started. Job ID: ${result.job_id}`, "success");
-    toast("Sitemap scan started.", "success");
+    const destinationMessage = payload.output_mode === "local"
+      ? "Preparing your local screenshot folder and Chromium…"
+      : "Initializing the browser and GitHub connection…";
+    appendLog(`Job ${result.job_id} created. ${destinationMessage}`, "info");
+    setFormMessage(`Capture job started. Job ID: ${result.job_id}`, "success");
+    toast("Sitemap capture started.", "success");
     await refreshStatus();
   } catch (error) {
     document.getElementById("github-token").value = "";
     setFormMessage(error.message || String(error), "error");
   } finally {
     button.disabled = Boolean(state.lastStatus?.running);
-    button.querySelector("span:first-child").textContent = "Start scanning";
+    button.querySelector("span:first-child").textContent = "Start capture";
   }
 }
 
@@ -195,22 +280,24 @@ function updateDashboard(status) {
   const running = Boolean(status?.running);
   const tracked = Object.values(counts).reduce((a, b) => a + Number(b || 0), 0);
   const uploaded = Number(counts.uploaded || 0);
+  const savedLocal = Number(counts.saved_local || 0);
+  const saved = uploaded + savedLocal;
   const skipped = Number(counts.skipped_robots || 0);
   const failed = Number(counts.failed || 0);
   const captured = Number(counts.captured || 0);
   const total = Number(job?.total_urls || 0);
-  const done = uploaded + skipped + failed;
+  const done = saved + skipped + failed;
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 
   setText("metric-tracked", formatNumber(metrics.tracked_pages || tracked));
-  setText("metric-uploaded", formatNumber(metrics.uploaded_screenshots || uploaded));
+  setText("metric-uploaded", formatNumber(metrics.uploaded_screenshots || saved));
   setText("metric-jobs", formatNumber(metrics.jobs || 0));
   setText("metric-engine", running ? "Working" : (job?.status === "completed" ? "Complete" : "Ready"));
   setText("metric-engine-detail", running ? (status.runtime?.message || "Processing pages") : (job?.message || "Waiting for a scan"));
   setText("scan-state", running ? capitalize(status.runtime?.stage || "running") : capitalize(job?.status || "idle"));
-  setText("progress-label", total ? `${formatNumber(done)} of ${formatNumber(total)} pages resolved · ${formatNumber(captured)} waiting to upload` : "No active scan");
+  setText("progress-label", total ? `${formatNumber(done)} of ${formatNumber(total)} pages resolved · ${formatNumber(captured)} waiting to save` : "No active capture");
   setText("progress-percent", `${percent}%`);
-  setText("progress-uploaded", formatNumber(uploaded));
+  setText("progress-uploaded", formatNumber(saved));
   setText("progress-skipped", formatNumber(skipped));
   setText("progress-failed", formatNumber(failed));
   setText("activity-footer-text", running ? (status.runtime?.message || "Engine is working") : "Engine is ready for a new job");
@@ -279,8 +366,8 @@ async function refreshInventory() {
       badge.textContent = page.status || "unknown";
       statusCell.appendChild(badge);
       const pathCell = document.createElement("td");
-      pathCell.textContent = page.github_path || page.error || "—";
-      pathCell.title = page.github_path || page.error || "";
+      pathCell.textContent = page.output_path || page.github_path || page.error || "—";
+      pathCell.title = page.output_path || page.github_path || page.error || "";
       row.append(urlCell, sourceCell, statusCell, pathCell);
       body.appendChild(row);
     }
@@ -303,10 +390,14 @@ async function refreshHistory() {
     }
     for (const job of jobs) {
       const row = document.createElement("tr");
+      const isLocal = job.config?.output_mode === "local";
+      const destination = isLocal
+        ? (job.config?.local_output_dir || "This PC")
+        : `${job.config?.repository || "GitHub"} / ${job.config?.branch || "main"}`;
       const values = [
         formatDate(job.created_at),
-        job.config?.repository || "—",
-        job.config?.branch || "main",
+        destination,
+        isLocal ? "Local" : "GitHub",
         job.status || "unknown",
         formatNumber(job.total_urls || 0),
         formatNumber(job.uploaded || 0)
@@ -338,7 +429,7 @@ async function pollLoop() {
     if (state.page === "dashboard") {
       for (const event of events) appendLog(event.message, event.type, event.timestamp);
     }
-    if (events.some((event) => ["uploaded", "completed", "stopped", "fatal", "reports_uploaded"].includes(event.type))) {
+    if (events.some((event) => ["uploaded", "saved_local", "completed", "stopped", "fatal", "reports_uploaded", "reports_saved"].includes(event.type))) {
       if (state.page === "dashboard") await refreshInventory();
       if (state.page === "history") await refreshHistory();
     }
