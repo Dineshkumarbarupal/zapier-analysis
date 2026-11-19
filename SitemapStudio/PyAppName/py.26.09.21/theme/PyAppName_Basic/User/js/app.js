@@ -294,7 +294,7 @@ function updateDashboard(status) {
   const runtime = status?.runtime || {};
   const discoveryTotal = Number(runtime.total_sitemaps || 0);
   const discoveryProcessed = Number(runtime.processed_sitemaps || 0);
-  const discoveryComplete = Boolean(runtime.discovery_complete) || ["discovered", "capturing", "page", "captured", "saved_local", "uploaded", "completed", "stopped"].includes(runtime.stage);
+  const discoveryComplete = Boolean(runtime.discovery_complete) || ["discovered", "capturing", "page", "captured", "saved_local", "uploaded", "completed"].includes(runtime.stage);
   const discoveryPercent = discoveryComplete ? 100 : (discoveryTotal > 0 ? Math.min(99, Math.round((discoveryProcessed / discoveryTotal) * 100)) : 0);
   setText("metric-tracked", formatNumber(metrics.tracked_pages || tracked));
   setText("metric-uploaded", formatNumber(metrics.uploaded_screenshots || saved));
