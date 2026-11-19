@@ -1,0 +1,85 @@
+<section class="page-heading">
+  <div>
+    <div class="eyebrow"><span class="eyebrow-line"></span> SITEMAP INTELLIGENCE</div>
+    <h1>Public page <span>scanner.</span></h1>
+    <p class="page-subtitle">Discover sitemap URLs, capture browser screenshots, and commit the results directly to your GitHub repository.</p>
+  </div>
+  <div class="heading-badge"><span class="pulse-dot"></span> LOCAL DESKTOP ENGINE</div>
+</section>
+
+<section class="metric-grid" aria-label="Workspace metrics">
+  <article class="metric-card"><div class="metric-top"><span>Tracked pages</span><span class="metric-symbol">⌗</span></div><strong id="metric-tracked">0</strong><small>Unique URLs in local database</small></article>
+  <article class="metric-card"><div class="metric-top"><span>Uploaded screenshots</span><span class="metric-symbol metric-symbol-green">↗</span></div><strong id="metric-uploaded">0</strong><small>Confirmed GitHub commits</small></article>
+  <article class="metric-card"><div class="metric-top"><span>Scan jobs</span><span class="metric-symbol">◷</span></div><strong id="metric-jobs">0</strong><small>Runs recorded on this device</small></article>
+  <article class="metric-card metric-card-status"><div class="metric-top"><span>Engine status</span><span class="metric-symbol metric-symbol-green">●</span></div><strong id="metric-engine">Ready</strong><small id="metric-engine-detail">Waiting for a scan</small></article>
+</section>
+
+<div class="dashboard-grid">
+  <section class="panel scan-panel">
+    <div class="panel-heading">
+      <div><div class="panel-kicker">NEW SCAN</div><h2>Configure your scan</h2><p>Connect a sitemap source and a GitHub destination.</p></div>
+      <span class="step-counter">01 <i>/</i> 03</span>
+    </div>
+    <form id="scan-form" autocomplete="off">
+      <div class="field-group">
+        <div class="field-heading"><label for="sitemap-urls">Sitemap URLs</label><span class="field-hint">One URL per line · nested indexes supported</span></div>
+        <textarea id="sitemap-urls" class="textarea sitemap-textarea" spellcheck="false" required placeholder="https://example.com/sitemap.xml&#10;https://example.com/blog/sitemap.xml"></textarea>
+        <div class="field-foot"><span><span class="mini-dot"></span> HTTP and HTTPS public URLs only</span><button class="text-button" type="button" id="load-zapier-samples">Load Zapier sample set</button></div>
+      </div>
+
+      <div class="field-divider"><span>GITHUB DESTINATION</span></div>
+      <div class="field-group">
+        <label for="repository-url">Repository URL</label>
+        <input id="repository-url" class="text-input" type="url" required value="https://github.com/Dineshkumarbarupal/zapier-analysis.git" placeholder="https://github.com/owner/repository.git">
+      </div>
+      <div class="two-column-fields">
+        <div class="field-group"><label for="branch-name">Target branch</label><input id="branch-name" class="text-input" value="main" required maxlength="120"></div>
+        <div class="field-group"><label for="github-token">Personal access token <span class="required-mark">*</span></label><div class="password-wrap"><input id="github-token" class="text-input" type="password" autocomplete="new-password" placeholder="github_pat_…" required><button type="button" id="toggle-token" class="password-toggle" aria-label="Show token">Show</button></div></div>
+      </div>
+      <div class="token-note"><span class="lock-icon">▣</span><span>Token is held in process memory only. It is never written to SQLite, reports, logs, or Git.</span></div>
+
+      <div class="field-divider"><span>CAPTURE SETTINGS</span><button class="text-button" type="button" id="toggle-advanced">Advanced settings <span id="advanced-chevron">⌄</span></button></div>
+      <div class="settings-grid">
+        <div class="field-group"><label for="batch-size">Upload batch size</label><select id="batch-size" class="text-input"><option value="1">1 screenshot</option><option value="5">5 screenshots</option><option value="10" selected>10 screenshots</option><option value="20">20 screenshots</option></select><small>Local images are deleted after the batch commit is confirmed.</small></div>
+        <div class="field-group"><label for="delay-seconds">Delay between pages</label><div class="input-with-unit"><input id="delay-seconds" class="text-input" type="number" min="0.5" max="120" step="0.5" value="1"><span>seconds</span></div><small>Robots.txt crawl-delay is always respected.</small></div>
+      </div>
+      <div class="advanced-settings hidden" id="advanced-settings">
+        <div class="settings-grid">
+          <div class="field-group"><label for="max-urls">Maximum URLs <span class="optional-label">0 = unlimited</span></label><input id="max-urls" class="text-input" type="number" min="0" value="0"></div>
+          <div class="field-group"><label for="settle-ms">Wait after page load</label><div class="input-with-unit"><input id="settle-ms" class="text-input" type="number" min="0" max="30000" step="100" value="1200"><span>ms</span></div></div>
+          <div class="field-group"><label for="quality">JPEG quality</label><div class="input-with-unit"><input id="quality" class="text-input" type="number" min="40" max="90" value="75"><span>/ 90</span></div></div>
+          <div class="field-group"><label for="max-height">Full-page height cap</label><div class="input-with-unit"><input id="max-height" class="text-input" type="number" min="2000" max="50000" step="1000" value="14000"><span>px</span></div></div>
+        </div>
+        <label class="checkbox-row"><input id="retry-failed" type="checkbox"><span class="custom-check"></span><span><strong>Retry previously failed URLs</strong><small>Useful after network or website issues are resolved.</small></span></label>
+      </div>
+
+      <div class="form-actions">
+        <button class="button button-secondary" type="button" id="validate-button"><span class="button-icon">⌁</span> Test GitHub connection</button>
+        <button class="button button-primary" type="submit" id="start-button"><span>Start scanning</span><span class="button-arrow">→</span></button>
+      </div>
+      <div class="form-message" id="form-message" role="status"></div>
+    </form>
+  </section>
+
+  <section class="panel activity-panel">
+    <div class="panel-heading activity-heading">
+      <div><div class="panel-kicker">LIVE MONITOR</div><h2>Scan activity</h2><p>Progress and upload events from the local engine.</p></div>
+      <span class="live-label"><span class="pulse-dot"></span> LIVE</span>
+    </div>
+    <div class="scan-state-card">
+      <div class="scan-state-top"><div><span class="state-label">CURRENT STATE</span><strong id="scan-state">Idle</strong></div><span class="state-icon" id="scan-state-icon">Ⅱ</span></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-meta"><span id="progress-label">No active scan</span><strong id="progress-percent">0%</strong></div>
+      <div class="progress-stats"><div><strong id="progress-uploaded">0</strong><span>uploaded</span></div><div><strong id="progress-skipped">0</strong><span>skipped</span></div><div><strong id="progress-failed">0</strong><span>failed</span></div></div>
+    </div>
+    <div class="activity-toolbar"><div><strong>Activity log</strong><span id="log-count">0 events</span></div><button class="text-button" type="button" id="clear-log">Clear log</button></div>
+    <div class="activity-log" id="activity-log"><div class="empty-log"><span class="empty-log-icon">⌁</span><strong>No activity yet</strong><p>Start a scan to see discovery, capture, and GitHub upload events here.</p></div></div>
+    <div class="activity-footer"><span class="status-dot"></span><span id="activity-footer-text">Engine is ready for a new job</span><button class="button button-danger-ghost hidden" type="button" id="stop-button">Stop scan</button></div>
+  </section>
+</div>
+
+<section class="panel inventory-panel">
+  <div class="panel-heading inventory-heading"><div><div class="panel-kicker">PAGE INVENTORY</div><h2>Discovered pages</h2><p>URL-level status for the latest scan. This is not a count of authenticated in-app screens.</p></div><button class="button button-secondary button-small" type="button" id="refresh-status">↻ Refresh</button></div>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>PAGE URL</th><th>SOURCE SITEMAP</th><th>STATUS</th><th>GITHUB PATH</th></tr></thead><tbody id="inventory-body"><tr><td colspan="4" class="table-empty">No pages discovered yet. Configure a sitemap to begin.</td></tr></tbody></table></div>
+  <div class="table-footer"><span id="inventory-caption">Showing the latest scan inventory</span><span class="privacy-caption">Local database · SQLite</span></div>
+</section>
